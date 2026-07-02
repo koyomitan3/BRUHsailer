@@ -90,8 +90,121 @@ const RAW_TASKS = [
 ];
 const { useState, useEffect, useCallback, useRef } = React;
 
+const APP_VERSION = "Tracker v2.0";
+const GUIDE_UPDATED = "Guide last updated 7 Jun 2026";
+
+/* ---------- design tokens & stylesheet ---------- */
+const CSS = `
+:root{
+  --bg:#0b0e13; --surface:#11161d; --raised:#161d26; --inset:#0d1117;
+  --line:#232b36; --line-soft:#1b222c;
+  --text:#e8edf3; --text-dim:#8b96a3; --text-faint:#5d6874;
+  --green:#3fb950; --green-deep:#238636; --green-bg:#0d1f12;
+  --blue:#58a6ff; --blue-deep:#1f6feb; --blue-bg:#0d1a2e;
+  --amber:#d29922; --amber-deep:#9e6a03; --amber-bg:#1e1908;
+  --red:#f85149; --red-deep:#da3633; --red-bg:#1f0d0d;
+  --mono:ui-monospace,'SF Mono','Cascadia Code','JetBrains Mono',Consolas,monospace;
+}
+html,body{margin:0;padding:0;background:var(--bg);}
+*{box-sizing:border-box;}
+.app{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);min-height:100vh;color:var(--text);padding-bottom:64px;}
+.wrap{max-width:1280px;margin:0 auto;padding:0 28px;width:100%;}
+.mono{font-family:var(--mono);}
+
+button{font-family:inherit;}
+button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px;}
+
+.pill{padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text-dim);
+  font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  transition:border-color .13s,color .13s,background .13s,transform .08s;}
+.pill:hover{border-color:#3a4552;color:var(--text);}
+.pill:active{transform:translateY(1px);}
+.pill.on{background:color-mix(in srgb,var(--pc) 12%,transparent);border-color:var(--pc);color:var(--pc);}
+.pill.on:hover{border-color:var(--pc);}
+
+.searchbox{display:flex;align-items:center;gap:8px;background:var(--inset);border:1px solid var(--line);border-radius:9px;
+  padding:6px 11px;min-width:230px;flex:0 1 340px;transition:border-color .15s;}
+.searchbox:focus-within{border-color:var(--blue-deep);}
+.searchbox input{flex:1;background:transparent;border:none;color:var(--text);font-size:13.5px;outline:none;min-width:0;font-family:inherit;}
+.searchbox .clear{cursor:pointer;color:var(--text-dim);font-size:14px;line-height:1;border:none;background:none;padding:2px;}
+.searchbox .clear:hover{color:var(--text);}
+.kbd{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;line-height:1.5;}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;margin-bottom:8px;overflow:hidden;
+  transition:border-color .15s,background .15s,box-shadow .15s;scroll-margin-top:180px;}
+.card.done{background:var(--green-bg);border-color:var(--green-deep);}
+.card.parallel{background:var(--blue-bg);border-color:var(--blue-deep);}
+.card.postponed{background:var(--amber-bg);border-color:var(--amber-deep);}
+.card.current{border-color:var(--green);box-shadow:0 0 0 1px var(--green),0 0 18px rgba(63,185,80,.18);}
+.card.sub{margin-left:24px;}
+
+.rowhead{display:flex;align-items:center;padding:12px 14px;gap:12px;cursor:pointer;border-left:2px solid transparent;transition:background .12s;}
+.card.sub .rowhead{border-left-color:#2e3947;}
+.rowhead:hover{background:rgba(255,255,255,.028);}
+.rowhead:hover .caret{color:var(--text);border-color:#3a4552;}
+
+.chk{width:22px;height:22px;border-radius:6px;border:2px solid #4a5563;background:transparent;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;transition:border-color .12s,background .12s;}
+.chk:hover{border-color:var(--green);}
+.chk.on{background:var(--green-deep);border-color:var(--green-deep);}
+
+.steplabel{font-family:var(--mono);background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:2px 7px;
+  font-size:12px;font-weight:600;color:#aeb9c5;flex-shrink:0;min-width:42px;text-align:center;}
+.card.sub .steplabel{background:transparent;color:var(--text-faint);border-color:var(--line-soft);}
+
+.iconbtn{width:25px;height:25px;border-radius:6px;border:1px solid var(--line);background:transparent;cursor:pointer;font-size:12px;
+  color:#4a5563;display:flex;align-items:center;justify-content:center;transition:border-color .12s,color .12s,background .12s;}
+.iconbtn:hover{border-color:#3a4552;color:var(--text-dim);}
+.iconbtn.blue{background:#1f3250;border-color:var(--blue-deep);color:var(--blue);}
+.iconbtn.amber{background:var(--amber-bg);border-color:var(--amber-deep);color:var(--amber);}
+.caret{transition:transform .18s,color .12s,border-color .12s;}
+.caret.open{transform:rotate(180deg);}
+
+.details{border-top:1px solid var(--line-soft);animation:reveal .16s ease;}
+@keyframes reveal{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}
+
+.chip{border-radius:8px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px;background:var(--raised);border:1px solid var(--line);}
+.chip.red{background:var(--red-bg);border-color:var(--red-deep);}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+.gp{font-family:var(--mono);font-size:11.5px;font-weight:600;flex-shrink:0;padding:2px 8px;border-radius:12px;}
+.gp.plus{color:var(--green);background:var(--green-bg);border:1px solid var(--green-deep);}
+.gp.minus{color:var(--red);background:var(--red-bg);border:1px solid var(--red-deep);}
+.behindchip{font-family:var(--mono);font-size:11px;font-weight:700;flex-shrink:0;color:var(--red);background:var(--red-bg);
+  border:1px solid var(--red-deep);padding:2px 8px;border-radius:12px;cursor:help;}
+
+.divider{display:flex;align-items:center;gap:12px;margin:22px 0 12px;}
+.divider:first-child{margin-top:4px;}
+.divider .rail{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent);}
+.divider .name{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;}
+.divider .count{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);white-space:nowrap;}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:12px;animation:reveal .16s ease;}
+.field{background:var(--inset);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:14px;padding:9px 12px;outline:none;font-family:inherit;transition:border-color .15s;}
+.field:focus{border-color:var(--blue-deep);}
+textarea.field{width:100%;resize:vertical;}
+.notes{min-height:46px;font-size:14px;}
+.lvl{display:flex;align-items:center;gap:5px;background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:3px 7px;transition:border-color .15s;}
+.lvl:focus-within{border-color:var(--blue-deep);}
+.lvl input{width:100%;background:transparent;border:none;color:var(--text);font-size:14px;font-weight:700;outline:none;text-align:right;min-width:0;font-family:var(--mono);}
+.lvl .abbr{font-size:10.5px;font-weight:700;color:var(--text-dim);width:26px;font-family:var(--mono);}
+
+.seclabel{font-size:10.5px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;font-weight:600;}
+.seclabel.red{color:var(--red);}
+
+input[type=number]::-webkit-inner-spin-button{opacity:.35;}
+::selection{background:rgba(31,111,235,.35);}
+*{scrollbar-width:thin;scrollbar-color:#2a3340 var(--bg);}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:#2a3340;border-radius:5px;border:2px solid var(--bg);}
+::-webkit-scrollbar-thumb:hover{background:#3a4552;}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}
+@media (max-width:640px){.wrap{padding:0 14px;}.card.sub{margin-left:12px;}}
+`;
+
+/* ---------- helpers ---------- */
 function formatXP(n){ if(n==null) return ''; if(n>=1e6) return (n/1e6).toFixed(1)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'k'; return ''+n; }
-function formatGP(n){ if(n==null) return ''; const a=Math.abs(n), s=n<0?'-':'+'; if(a>=1e6) return s+(a/1e6).toFixed(1)+'M'; if(a>=1e3) return s+(a/1e3).toFixed(0)+'k'; return s+a; }
+function formatGP(n){ if(n==null) return ''; const a=Math.abs(n), s=n<0?'−':'+'; if(a>=1e6) return s+(a/1e6).toFixed(1)+'M'; if(a>=1e3) return s+(a/1e3).toFixed(0)+'k'; return s+a; }
 
 const STORAGE_KEY = "bruhsailer_tracker_v4";
 function loadState(){
@@ -104,18 +217,115 @@ function saveState(s){ try{ window.localStorage&&window.localStorage.setItem(STO
 
 const HISCORE_ORDER = ['OVERALL','ATK','DEF','STR','HP','RNG','PRY','MAG','COK','WC','FLE','FSH','FM','CRF','SMI','MNG','HRB','AGI','THI','SLY','FRM','RC','HUN','CON','SAI'];
 
-const CONTAINER = { maxWidth: 1280, margin: "0 auto", padding: "0 28px", width: "100%", boxSizing: "border-box" };
-
-function Ring({ pct, size = 16, stroke = 2.5, color = "#58a6ff" }){
+function Ring({ pct, size = 16, stroke = 2.5, color = "var(--green)" }){
   const r=(size-stroke)/2, c=2*Math.PI*r, off=c-(pct/100)*c;
   return (
-    <svg width={size} height={size} style={{transform:"rotate(-90deg)", flexShrink:0}}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#30363d" strokeWidth={stroke} />
+    <svg width={size} height={size} style={{transform:"rotate(-90deg)", flexShrink:0}} aria-hidden="true">
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round" style={{transition:"stroke-dashoffset 0.4s ease"}} />
     </svg>
   );
 }
 
+function ChapterDivider({ chapter, done, total }){
+  return (
+    <div className="divider" role="separator">
+      <Ring pct={total?Math.round(done/total*100):0} size={18} />
+      <span className="name">{chapter}</span>
+      <span className="count">{done}/{total}</span>
+      <span className="rail" />
+    </div>
+  );
+}
+
+/* ---------- task card ---------- */
+function TaskCard({ task, isDone, isPostponed, isParallel, isExpanded, isNext, draggable, levels, hasLevels, note,
+                    onToggle, onExpand, onNote, onDragStart, onDragOver, onDrop, nextUpRef }){
+  const xpEntries=Object.entries(task.xp_gains||{}).filter(([sk,xp])=>SKILL_FULL[sk]&&xp>0);
+  const behind=Object.entries(task.expected||{})
+    .filter(([sk,lvl])=>SKILL_FULL[sk]&&(levels[sk]||1)<lvl)
+    .sort((a,b)=>(b[1]-(levels[b[0]]||1))-(a[1]-(levels[a[0]]||1)));
+  const cls=["card", task.isSub&&"sub", isDone&&"done", !isDone&&isParallel&&"parallel", !isDone&&!isParallel&&isPostponed&&"postponed", isNext&&"current"].filter(Boolean).join(" ");
+  const behindTip=behind.map(([sk,l])=>`${SKILL_FULL[sk]} ${levels[sk]||1}→${l}`).join(", ");
+
+  return (
+    <div ref={isNext?nextUpRef:null} className={cls} draggable={draggable}
+      onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}>
+      <div className="rowhead" style={draggable?{cursor:"grab"}:null} onClick={onExpand}>
+        {draggable && <span style={{color:"var(--text-faint)", fontSize:15, flexShrink:0}} aria-hidden="true">⠿</span>}
+        <button className={"chk"+(isDone?" on":"")} aria-label={isDone?"Mark step not done":"Mark step done"}
+          onClick={e=>{ e.stopPropagation(); onToggle('done'); }}>{isDone?"✓":""}</button>
+        <span className="steplabel">{task.label}</span>
+        <span style={{flex:1, fontSize:15.5, fontWeight:500, lineHeight:1.4, color:isDone?"var(--text-faint)":"var(--text)", textDecoration:isDone?"line-through":"none"}}>
+          {isNext && <span style={{display:"inline-block", fontSize:10, fontWeight:800, letterSpacing:.5, color:"var(--bg)", background:"var(--green)", borderRadius:4, padding:"1px 6px", marginRight:8, verticalAlign:"middle"}}>IN PROGRESS</span>}
+          {task.activity}
+          {note && <span title="Has a note" style={{marginLeft:6, fontSize:12}}>📝</span>}
+        </span>
+        {hasLevels && !isDone && behind.length>0 && <span className="behindchip" title={"Behind: "+behindTip}>▲{behind.length}</span>}
+        {task.gp_change!=null && <span className={"gp "+(task.gp_change>=0?"plus":"minus")} title="GP change this step">{formatGP(task.gp_change)}</span>}
+        <div style={{display:"flex", gap:4, flexShrink:0}}>
+          <button className={"iconbtn"+(isParallel?" blue":"")} title="Doing in parallel" aria-pressed={isParallel}
+            onClick={e=>{ e.stopPropagation(); onToggle('parallel'); }}>⚡</button>
+          <button className={"iconbtn"+(isPostponed?" amber":"")} title="Postpone" aria-pressed={isPostponed}
+            onClick={e=>{ e.stopPropagation(); onToggle('postponed'); }}>⏳</button>
+          <span className={"iconbtn caret"+(isExpanded?" open":"")} aria-hidden="true">▾</span>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="details" style={{padding:"0 14px 14px"}}>
+          {task.guide && <div style={{marginTop:12, fontSize:14.5, lineHeight:1.65, color:"#c9d3dd", whiteSpace:"pre-wrap", maxWidth:820}}>{task.guide}</div>}
+
+          {xpEntries.length>0 && (
+            <div style={{marginTop:12}}>
+              <div className="seclabel" style={{marginBottom:7}}>XP gains</div>
+              <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
+                {xpEntries.map(([sk,xp])=>(
+                  <span key={sk} className="chip">
+                    <span className="dot" style={{background:SKILL_COLORS[sk]}} />
+                    <span style={{fontSize:12.5, fontWeight:700}}>{SKILL_FULL[sk]}</span>
+                    <span className="mono" style={{fontSize:12, color:"var(--text-dim)"}}>{formatXP(xp)} xp</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {behind.length>0 && (
+            <div style={{marginTop:12}}>
+              <div className="seclabel red" style={{marginBottom:7}}>Guide expects higher levels than you have</div>
+              <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
+                {behind.map(([sk,lvl])=>(
+                  <span key={sk} className="chip red">
+                    <span className="dot" style={{background:SKILL_COLORS[sk], width:7, height:7}} />
+                    <span style={{fontSize:12.5, fontWeight:600, color:"#f0c0c0"}}>{SKILL_FULL[sk]}</span>
+                    <span className="mono" style={{fontSize:12.5, color:"var(--red)", fontWeight:700}}>{lvl}</span>
+                    <span className="mono" style={{fontSize:11, color:"var(--text-dim)"}}>you: {levels[sk]||"?"}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {task.gp_total!=null && (
+            <div style={{marginTop:12}}>
+              <div className="seclabel" style={{marginBottom:4}}>GP after step</div>
+              <span className="mono" style={{fontSize:14, fontWeight:700, color:"#f0883e"}}>{task.gp_total>=1e6?(task.gp_total/1e6).toFixed(2)+"M":(task.gp_total/1e3).toFixed(0)+"k"} gp</span>
+            </div>
+          )}
+
+          <div style={{marginTop:12}}>
+            <div className="seclabel" style={{marginBottom:6}}>My notes</div>
+            <textarea className="field notes" value={note} onChange={e=>onNote(e.target.value)} onClick={e=>e.stopPropagation()}
+              placeholder="e.g. stopped at 60 slayer, need 2 more diaries first…" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- app ---------- */
 function App(){
   const [state,setState]=useState(loadState);
   const [filter,setFilter]=useState("all");
@@ -126,13 +336,25 @@ function App(){
   const [ioText,setIoText]=useState("");
   const [rsnInput,setRsnInput]=useState(state.rsn||"");
   const [fetchStatus,setFetchStatus]=useState("");
+  const [search,setSearch]=useState("");
   const dragId=useRef(null);
   const nextUpRef=useRef(null);
+  const searchRef=useRef(null);
 
   const chapters=[...new Set(RAW_TASKS.map(t=>t.chapter))];
   const allTasks=RAW_TASKS.filter(t=>t.activity);
 
   useEffect(()=>{ saveState(state); },[state]);
+
+  useEffect(()=>{
+    const onKey=(e)=>{
+      const el=document.activeElement, typing=el&&(el.tagName==="INPUT"||el.tagName==="TEXTAREA");
+      if(e.key==="/" && !typing){ e.preventDefault(); if(searchRef.current) searchRef.current.focus(); }
+      else if(e.key==="Escape" && el===searchRef.current){ setSearch(""); searchRef.current.blur(); }
+    };
+    document.addEventListener("keydown",onKey);
+    return ()=>document.removeEventListener("keydown",onKey);
+  },[]);
 
   const toggle=useCallback((id,key)=>{
     setState(prev=>{
@@ -158,10 +380,11 @@ function App(){
     dragId.current=null;
   },[]);
 
-  const fetchHiscores=useCallback(async ()=>{
-    const name=rsnInput.trim();
+  const fetchHiscores=useCallback(async (override)=>{
+    const name=(typeof override==="string"&&override?override:rsnInput).trim();
     if(!name){ setFetchStatus("Enter your RuneScape name first."); return; }
-    setFetchStatus("Looking up " + name + "…");
+    setRsnInput(name);
+    setFetchStatus("Looking up "+name+"…");
     const target="https://secure.runescape.com/m=hiscore_oldschool/index_lite.ws?player="+encodeURIComponent(name);
     const proxies=[
       u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u),
@@ -204,14 +427,16 @@ function App(){
   },[state]);
 
   const applyImport=useCallback((p)=>{
+    if(!window.confirm("This will replace your current progress, levels and notes with the imported data. Continue?")) return false;
     setState({done:p.done||{},postponed:p.postponed||{},parallel:p.parallel||{},postponedOrder:p.postponedOrder||[],levels:p.levels||{},notes:p.notes||{},rsn:p.rsn||""});
+    return true;
   },[]);
 
   const importFile=useCallback((e)=>{
     const file=e.target.files&&e.target.files[0];
     if(!file) return;
     const reader=new FileReader();
-    reader.onload=()=>{ try{ applyImport(JSON.parse(reader.result)); setShowIO(false); }catch(err){ alert("That .txt file isn't valid progress data."); } };
+    reader.onload=()=>{ try{ if(applyImport(JSON.parse(reader.result))) setShowIO(false); }catch(err){ alert("That .txt file isn't valid progress data."); } };
     reader.readAsText(file);
     e.target.value="";
   },[applyImport]);
@@ -219,14 +444,27 @@ function App(){
   const doneCount=Object.keys(state.done).length, total=allTasks.length, pct=Math.round(doneCount/total*100);
   const nextUp=allTasks.find(t=>!state.done[t.id]&&!state.postponed[t.id]);
   const nextUpId=nextUp?nextUp.id:null;
+  const hasLevels=Object.keys(state.levels).length>0;
 
   const chapterPct={};
   chapters.forEach(ch=>{ const ct=allTasks.filter(t=>t.chapter===ch), cd=ct.filter(t=>state.done[t.id]).length; chapterPct[ch]=ct.length?Math.round(cd/ct.length*100):0; });
 
+  // status counts respect the active chapter filter
+  const scoped=chapterFilter==="all"?allTasks:allTasks.filter(t=>t.chapter===chapterFilter);
+  const counts={
+    done:scoped.filter(t=>state.done[t.id]).length,
+    todo:scoped.filter(t=>!state.done[t.id]&&!state.postponed[t.id]).length,
+    postponed:scoped.filter(t=>state.postponed[t.id]).length,
+    parallel:scoped.filter(t=>state.parallel[t.id]).length,
+  };
+
+  const q=search.trim().toLowerCase();
   let filteredTasks=allTasks.filter(t=>{
     if(chapterFilter!=="all"&&t.chapter!==chapterFilter) return false;
     const d=!!state.done[t.id],p=!!state.postponed[t.id],par=!!state.parallel[t.id];
-    if(filter==="done") return d; if(filter==="todo") return !d&&!p; if(filter==="postponed") return p; if(filter==="parallel") return par; return true;
+    if(filter==="done"&&!d) return false; if(filter==="todo"&&(d||p)) return false; if(filter==="postponed"&&!p) return false; if(filter==="parallel"&&!par) return false;
+    if(q && !((t.label+" "+t.activity+" "+(t.guide||"")).toLowerCase().includes(q))) return false;
+    return true;
   });
   if(filter==="postponed"){ filteredTasks=[...filteredTasks].sort((a,b)=>{ const ia=state.postponedOrder.indexOf(a.id),ib=state.postponedOrder.indexOf(b.id); return (ia===-1?9999:ia)-(ib===-1?9999:ib); }); }
 
@@ -235,199 +473,163 @@ function App(){
   const toggleAll=()=>{ if(allExpanded) setExpandedIds({}); else { const m={}; visibleIds.forEach(id=>m[id]=true); setExpandedIds(m); } };
 
   const doExport=()=>{ setIoText(JSON.stringify(state)); setShowIO(s=>!s); };
-  const loadFromText=()=>{ try{ applyImport(JSON.parse(ioText)); setShowIO(false); }catch(e){ alert("That doesn't look like valid save data."); } };
+  const loadFromText=()=>{ try{ if(applyImport(JSON.parse(ioText))) setShowIO(false); }catch(e){ alert("That doesn't look like valid save data."); } };
   const jumpToNext=()=>{ if(nextUpRef.current) nextUpRef.current.scrollIntoView({behavior:"smooth",block:"center"}); };
 
-  const pill=(active,color)=>({padding:"5px 12px",borderRadius:8,border:"1px solid",fontSize:11.5,fontWeight:600,cursor:"pointer",transition:"all 0.15s",borderColor:active?color:"#2a3038",background:active?color+"1f":"transparent",color:active?color:"#9aa4af",display:"inline-flex",alignItems:"center",gap:6});
+  const pillStyle=(color)=>({"--pc":color});
+  const showDividers=filter!=="postponed";
+  let lastChapter=null;
 
   return (
-    <div style={{fontFamily:"'Segoe UI', system-ui, sans-serif", background:"#0d1117", minHeight:"100vh", color:"#e6edf3", paddingBottom:60}}>
+    <div className="app">
+      <style>{CSS}</style>
 
-      <header style={{position:"sticky", top:0, zIndex:100, background:"#0e1218", borderBottom:"1px solid #21262d"}}>
-        <div style={{...CONTAINER, paddingTop:13}}>
+      <header style={{position:"sticky", top:0, zIndex:100, background:"rgba(11,14,19,.92)", backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)", borderBottom:"1px solid var(--line)"}}>
+        <div className="wrap" style={{paddingTop:16}}>
           <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, flexWrap:"wrap"}}>
-            <div style={{display:"flex", alignItems:"center", gap:10}}>
-              <span style={{fontSize:19}}>📜</span>
-              <span style={{fontSize:17, fontWeight:700, letterSpacing:-0.2}}>Bruhsailer Ironman Guide</span>
-              <span style={{fontSize:10.5, color:"#8b949e", fontWeight:600, border:"1px solid #2a3038", borderRadius:20, padding:"1px 9px"}}>Chapter 3</span>
+            <div style={{display:"flex", alignItems:"center", gap:11}}>
+              <span style={{fontSize:24, lineHeight:1}} aria-hidden="true">📜</span>
+              <span style={{fontSize:23, fontWeight:800, letterSpacing:-0.5, color:"#f0f6fc"}}>Bruhsailer Ironman Guide</span>
+              <span className="mono" style={{fontSize:11, color:"var(--text-dim)", fontWeight:700, letterSpacing:.3, background:"var(--raised)", border:"1px solid var(--line)", borderRadius:6, padding:"3px 9px"}}>CH 3</span>
             </div>
-            <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
-              <div style={{display:"flex", alignItems:"center", gap:7}}>
-                <Ring pct={pct} size={20} color="#3fb950" />
-                <span style={{fontSize:13, fontWeight:700}}>{doneCount}<span style={{color:"#8b949e", fontWeight:400}}> / {total} done</span></span>
-              </div>
-              <span style={{width:1, height:18, background:"#2a3038"}} />
-              <button onClick={()=>setShowLevels(s=>!s)} style={pill(showLevels,"#58a6ff")}>⚔️ Levels</button>
-              <button onClick={doExport} style={pill(showIO,"#a371f7")}>💾 Save</button>
-              <button onClick={toggleAll} style={pill(false,"#8b949e")}>{allExpanded?"⊟ Collapse all":"⊞ Expand all"}</button>
-              {nextUpId!=null && <button onClick={jumpToNext} style={{...pill(false,"#3fb950"), background:"#0d1f12", borderColor:"#238636", color:"#3fb950"}}>▶ Current step</button>}
+            <div style={{display:"flex", alignItems:"center", gap:9}}>
+              <Ring pct={pct} size={22} />
+              <span style={{fontSize:15, fontWeight:700}}><span className="mono">{doneCount}</span><span style={{color:"var(--text-dim)", fontWeight:400}}> / <span className="mono">{total}</span> done</span></span>
             </div>
           </div>
 
-          <div style={{display:"flex", justifyContent:"space-between", gap:"10px 18px", flexWrap:"wrap", marginTop:11, paddingBottom:12}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px 14px", flexWrap:"wrap", marginTop:13}}>
+            <div className="searchbox">
+              <span style={{fontSize:13, opacity:.6}} aria-hidden="true">🔍</span>
+              <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search steps…" aria-label="Search steps" />
+              {q
+                ? <>
+                    <span className="mono" style={{fontSize:11, color:"var(--text-dim)", whiteSpace:"nowrap"}}>{filteredTasks.length} result{filteredTasks.length===1?"":"s"}</span>
+                    <button className="clear" onClick={()=>setSearch("")} aria-label="Clear search">✕</button>
+                  </>
+                : <span className="kbd" aria-hidden="true">/</span>}
+            </div>
+            <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
+              <button className={"pill"+(showLevels?" on":"")} style={pillStyle("var(--blue)")} onClick={()=>setShowLevels(s=>!s)}>⚔️ My Levels</button>
+              {state.rsn && <button className="pill" style={pillStyle("var(--blue)")} onClick={()=>{ setShowLevels(true); fetchHiscores(state.rsn); }}>↻ Refresh levels</button>}
+              <button className={"pill"+(showIO?" on":"")} style={pillStyle("var(--blue)")} onClick={doExport}>💾 Save</button>
+              <button className="pill" onClick={toggleAll}>{allExpanded?"⊟ Collapse all":"⊞ Expand all"}</button>
+              {nextUpId!=null && <button className="pill on" style={pillStyle("var(--green)")} onClick={jumpToNext}>▶ Current step</button>}
+            </div>
+          </div>
+
+          <div style={{display:"flex", justifyContent:"space-between", gap:"10px 18px", flexWrap:"wrap", marginTop:11, paddingBottom:13}}>
             <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
-              <button onClick={()=>setChapterFilter("all")} style={pill(chapterFilter==="all","#58a6ff")}><Ring pct={pct} /> All Chapters</button>
+              <button className={"pill"+(chapterFilter==="all"?" on":"")} style={pillStyle("var(--blue)")} onClick={()=>setChapterFilter("all")}><Ring pct={pct} /> All Chapters</button>
               {chapters.map(ch=>(
-                <button key={ch} onClick={()=>setChapterFilter(ch)} style={pill(chapterFilter===ch,"#58a6ff")}><Ring pct={chapterPct[ch]} /> {ch}</button>
+                <button key={ch} className={"pill"+(chapterFilter===ch?" on":"")} style={pillStyle("var(--blue)")} onClick={()=>setChapterFilter(ch)}><Ring pct={chapterPct[ch]} /> {ch}</button>
               ))}
             </div>
             <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
-              {[{key:"all",label:"All",color:"#9aa4af"},{key:"todo",label:"To Do",color:"#e6edf3"},{key:"done",label:"Done",color:"#3fb950"},{key:"postponed",label:"Postponed",color:"#d29922"},{key:"parallel",label:"In parallel",color:"#58a6ff"}].map(f=>(
-                <button key={f.key} onClick={()=>setFilter(f.key)} style={pill(filter===f.key,f.color)}>
+              {[{key:"all",label:"All",color:"var(--text-dim)"},{key:"todo",label:"To Do",color:"#e6edf3"},{key:"done",label:"Done",color:"var(--green)"},{key:"postponed",label:"Postponed",color:"var(--amber)"},{key:"parallel",label:"In parallel",color:"var(--blue)"}].map(f=>(
+                <button key={f.key} className={"pill"+(filter===f.key?" on":"")} style={pillStyle(f.color)} onClick={()=>setFilter(f.key)}>
                   {f.label}
-                  {f.key!=="all" && <span style={{opacity:0.7}}>{f.key==="done"?doneCount:f.key==="todo"?allTasks.filter(t=>!state.done[t.id]&&!state.postponed[t.id]).length:f.key==="postponed"?Object.keys(state.postponed).length:Object.keys(state.parallel).length}</span>}
+                  {f.key!=="all" && <span className="mono" style={{opacity:.75, fontSize:11}}>{counts[f.key]}</span>}
                 </button>
               ))}
             </div>
           </div>
         </div>
-        <div style={{height:3, background:"#1a2029"}}>
-          <div style={{width:`${pct}%`, height:"100%", background:"linear-gradient(90deg,#238636,#3fb950)", transition:"width 0.4s ease"}} />
+        <div style={{height:3, background:"var(--line-soft)"}}>
+          <div style={{width:`${pct}%`, height:"100%", background:"linear-gradient(90deg,var(--green-deep),var(--green))", transition:"width .4s ease"}} />
         </div>
       </header>
 
-      <div style={{...CONTAINER, paddingTop:16}}>
+      <div className="wrap" style={{paddingTop:16}}>
+
+        <div className="panel" style={{animation:"none"}}>
+          <div style={{display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:12, flexWrap:"wrap", marginBottom:9}}>
+            <div className="seclabel" style={{fontWeight:700, fontSize:12}}>How to use</div>
+            <div className="mono" style={{fontSize:11.5, color:"var(--text-faint)"}}>{APP_VERSION} · {GUIDE_UPDATED}</div>
+          </div>
+          <div style={{fontSize:14, color:"#c9d3dd", lineHeight:1.65}}>
+            Click any step to open its guide notes, XP, and the levels the guide expects you to have. Open as many steps as you like, jot notes on each, mark steps <span style={{color:"var(--green)", fontWeight:600}}>✓ done</span>, set them <span style={{color:"var(--blue)", fontWeight:600}}>⚡ in parallel</span>, or <span style={{color:"var(--amber)", fontWeight:600}}>⏳ postpone</span> them for later. Your current step has a <span style={{color:"var(--green)", fontWeight:600}}>green glow</span>. Press <span className="kbd">/</span> to search.
+          </div>
+          <div style={{fontSize:14, color:"#c9d3dd", lineHeight:1.65, marginTop:8}}>
+            <span style={{color:"var(--blue)", fontWeight:700}}>Tip:</span> open <span style={{fontWeight:700}}>⚔️ My Levels</span> and type in your RuneScape name to auto-fill your stats — steps you're under-leveled for get a red <span className="behindchip" style={{padding:"1px 6px"}}>▲3</span> marker, and expanding them shows exactly which skills to catch up.
+          </div>
+        </div>
 
         {showLevels && (
-          <div style={{background:"#10151c", border:"1px solid #21262d", borderRadius:12, padding:"14px 16px", marginBottom:12}}>
-            <div style={{fontSize:12, color:"#c9d1d9", marginBottom:8, fontWeight:600}}>Auto-fill from the OSRS hiscores</div>
+          <div className="panel">
+            <div style={{fontSize:13.5, color:"#c9d3dd", marginBottom:8, fontWeight:600}}>Auto-fill from the OSRS hiscores</div>
             <div style={{display:"flex", gap:8, marginBottom:6, flexWrap:"wrap"}}>
-              <input value={rsnInput} onChange={e=>setRsnInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') fetchHiscores(); }} placeholder="Your RuneScape name"
-                style={{flex:"1 1 200px", background:"#0d1117", border:"1px solid #30363d", borderRadius:8, color:"#e6edf3", fontSize:13, padding:"8px 11px", outline:"none", minWidth:0}} />
-              <button onClick={fetchHiscores} style={{...pill(false,"#3fb950"), background:"#0d1f12", borderColor:"#238636", color:"#3fb950", padding:"8px 16px"}}>Fetch levels</button>
+              <input className="field" style={{flex:"1 1 200px", minWidth:0}} value={rsnInput} onChange={e=>setRsnInput(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') fetchHiscores(); }} placeholder="Your RuneScape name" aria-label="RuneScape name" />
+              <button className="pill on" style={{...pillStyle("var(--blue)"), padding:"8px 16px"}} onClick={()=>fetchHiscores()}>Fetch levels</button>
             </div>
-            {fetchStatus && <div style={{fontSize:11.5, color: fetchStatus[0]==="✓"?"#3fb950":"#9aa4af", marginBottom:10, lineHeight:1.5}}>{fetchStatus}</div>}
-            <div style={{fontSize:11.5, color:"#8b949e", marginBottom:10}}>Or enter them manually. Expanded steps flag in <span style={{color:"#f85149", fontWeight:700}}>red</span> every skill the guide expects you to be higher in than you currently are.</div>
-            <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(86px, 1fr))", gap:7}}>
+            {fetchStatus && <div style={{fontSize:12.5, color:fetchStatus[0]==="✓"?"var(--green)":"var(--text-dim)", marginBottom:10, lineHeight:1.5}}>{fetchStatus}</div>}
+            <div style={{fontSize:13, color:"var(--text-dim)", marginBottom:10}}>Or enter them manually. Expanded steps flag in <span style={{color:"var(--red)", fontWeight:700}}>red</span> every skill the guide expects you to be higher in than you currently are.</div>
+            <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(88px, 1fr))", gap:7}}>
               {SKILLS.map(sk=>(
-                <div key={sk} style={{display:"flex", alignItems:"center", gap:5, background:"#0d1117", border:"1px solid #30363d", borderRadius:7, padding:"3px 7px"}}>
-                  <span style={{width:7, height:7, borderRadius:"50%", background:SKILL_COLORS[sk], flexShrink:0}} />
-                  <span style={{fontSize:10, fontWeight:700, color:"#8b949e", width:26}}>{sk}</span>
-                  <input type="number" min={1} max={99} value={state.levels[sk]||""} placeholder="–" onChange={e=>setLevel(sk,e.target.value)}
-                    style={{width:"100%", background:"transparent", border:"none", color:"#e6edf3", fontSize:13, fontWeight:700, outline:"none", textAlign:"right", minWidth:0}} />
-                </div>
+                <label key={sk} className="lvl">
+                  <span className="dot" style={{background:SKILL_COLORS[sk], width:7, height:7}} />
+                  <span className="abbr">{sk}</span>
+                  <input type="number" min={1} max={99} value={state.levels[sk]||""} placeholder="–" onChange={e=>setLevel(sk,e.target.value)} aria-label={SKILL_FULL[sk]+" level"} />
+                </label>
               ))}
             </div>
           </div>
         )}
 
         {showIO && (
-          <div style={{background:"#10151c", border:"1px solid #21262d", borderRadius:12, padding:"14px 16px", marginBottom:12}}>
-            <div style={{fontSize:12, color:"#c9d1d9", marginBottom:10, fontWeight:600}}>Back up or restore your progress</div>
+          <div className="panel">
+            <div style={{fontSize:13.5, color:"#c9d3dd", marginBottom:10, fontWeight:600}}>Back up or restore your progress</div>
             <div style={{display:"flex", gap:8, flexWrap:"wrap", marginBottom:12}}>
-              <button onClick={downloadTxt} style={{...pill(false,"#3fb950"), background:"#0d1f12", borderColor:"#238636", color:"#3fb950", padding:"7px 14px"}}>⬇ Download .txt</button>
-              <label style={{...pill(false,"#a371f7"), background:"#1a132e", borderColor:"#6e40c9", color:"#a371f7", padding:"7px 14px", cursor:"pointer"}}>
+              <button className="pill" style={{padding:"7px 14px"}} onClick={downloadTxt}>⬇ Download .txt</button>
+              <label className="pill" style={{padding:"7px 14px", cursor:"pointer"}}>
                 ⬆ Import .txt
                 <input type="file" accept=".txt,text/plain" onChange={importFile} style={{display:"none"}} />
               </label>
             </div>
-            <div style={{fontSize:11, color:"#8b949e", marginBottom:6}}>Or copy/paste the text manually:</div>
-            <textarea value={ioText} onChange={e=>setIoText(e.target.value)} spellCheck={false}
-              style={{width:"100%", height:64, background:"#0d1117", border:"1px solid #30363d", borderRadius:8, color:"#8b949e", fontSize:11, fontFamily:"monospace", padding:8, boxSizing:"border-box", resize:"vertical"}} />
+            <div style={{fontSize:11.5, color:"var(--text-dim)", marginBottom:6}}>Or copy/paste the text manually:</div>
+            <textarea className="field" style={{height:64, fontFamily:"var(--mono)", fontSize:11, color:"var(--text-dim)"}} value={ioText} onChange={e=>setIoText(e.target.value)} spellCheck={false} aria-label="Progress data" />
             <div style={{display:"flex", gap:8, marginTop:8}}>
-              <button onClick={()=>{ navigator.clipboard&&navigator.clipboard.writeText(ioText); }} style={pill(false,"#9aa4af")}>Copy</button>
-              <button onClick={loadFromText} style={pill(false,"#9aa4af")}>Load from text</button>
-              <button onClick={()=>setShowIO(false)} style={pill(false,"#9aa4af")}>Close</button>
+              <button className="pill" onClick={()=>{ navigator.clipboard&&navigator.clipboard.writeText(ioText); }}>Copy</button>
+              <button className="pill" onClick={loadFromText}>Load from text</button>
+              <button className="pill" onClick={()=>setShowIO(false)}>Close</button>
             </div>
           </div>
         )}
 
         {filter==="postponed" && filteredTasks.length>1 && (
-          <div style={{fontSize:11, color:"#8b949e", marginBottom:10, textAlign:"center"}}>↕ Drag steps to reorder how you'll come back to them</div>
+          <div style={{fontSize:11.5, color:"var(--text-dim)", marginBottom:10, textAlign:"center"}}>↕ Drag steps to reorder how you'll come back to them</div>
         )}
         {filteredTasks.length===0 && (
-          <div style={{textAlign:"center", padding:"60px 0", color:"#8b949e"}}><div style={{fontSize:40, marginBottom:12}}>⚔️</div><div style={{fontSize:16}}>No tasks match this filter.</div></div>
+          <div style={{textAlign:"center", padding:"60px 0", color:"var(--text-dim)"}}>
+            <div style={{fontSize:40, marginBottom:12}} aria-hidden="true">{q?"🔍":"⚔️"}</div>
+            <div style={{fontSize:16}}>{q?`No steps match “${search.trim()}”.`:"No tasks match this filter."}</div>
+            {q && <button className="pill" style={{marginTop:14}} onClick={()=>setSearch("")}>Clear search</button>}
+          </div>
         )}
 
         {filteredTasks.map(task=>{
-          const isDone=!!state.done[task.id], isPostponed=!!state.postponed[task.id], isParallel=!!state.parallel[task.id];
-          const isExpanded=!!expandedIds[task.id], isNext=task.id===nextUpId, draggable=filter==="postponed";
-          const xpEntries=Object.entries(task.xp_gains||{}).filter(([sk,xp])=>SKILL_FULL[sk]&&xp>0);
-          const behind=Object.entries(task.expected||{}).filter(([sk,lvl])=>SKILL_FULL[sk]&&(state.levels[sk]||1)<lvl).sort((a,b)=>(b[1]-(state.levels[b[0]]||1))-(a[1]-(state.levels[a[0]]||1)));
-          const note=state.notes[task.id]||"";
-          let bc="#262d36", bg="#10151c";
-          if(isDone){ bc="#238636"; bg="#0d1f12"; } else if(isParallel){ bc="#1f6feb"; bg="#0d1a2e"; } else if(isPostponed){ bc="#9e6a03"; bg="#1e1908"; }
-          if(isNext) bc="#3fb950";
-
+          const divider = showDividers && task.chapter!==lastChapter
+            ? <ChapterDivider key={"div-"+task.chapter} chapter={task.chapter}
+                done={allTasks.filter(t=>t.chapter===task.chapter&&state.done[t.id]).length}
+                total={allTasks.filter(t=>t.chapter===task.chapter).length} />
+            : null;
+          lastChapter=task.chapter;
           return (
-            <div key={task.id} ref={isNext?nextUpRef:null} draggable={draggable}
-              onDragStart={()=>{ if(draggable) dragId.current=task.id; }} onDragOver={e=>{ if(draggable) e.preventDefault(); }} onDrop={()=>{ if(draggable) handleDrop(task.id); }}
-              style={{background:bg, border:`1px solid ${bc}`, borderRadius:10, marginBottom:8, marginLeft: task.isSub?22:0, overflow:"hidden", transition:"border-color 0.2s, background 0.2s", boxShadow:isNext?"0 0 0 1px #3fb950, 0 0 16px rgba(63,185,80,0.22)":"none", cursor:draggable?"grab":"default"}}>
-
-              <div onClick={()=>toggleExpand(task.id)} style={{display:"flex", alignItems:"center", padding:"12px 14px", gap:12, cursor:draggable?"grab":"pointer", borderLeft: task.isSub?"2px solid #2f3a45":"2px solid transparent"}}>
-                {draggable && <span style={{color:"#484f58", fontSize:15, flexShrink:0}}>⠿</span>}
-                <button onClick={e=>{ e.stopPropagation(); toggle(task.id,'done'); }} style={{width:22, height:22, borderRadius:6, border:`2px solid ${isDone?"#238636":"#484f58"}`, background:isDone?"#238636":"transparent", cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:700}}>{isDone?"✓":""}</button>
-                <span style={{background: task.isSub?"#161c24":"#1a2029", border:`1px solid ${task.isSub?"#262f3a":"#2a3038"}`, borderRadius:6, padding:"1px 6px", fontSize:11, fontWeight:700, color: task.isSub?"#7d8896":"#a9b4c0", flexShrink:0, minWidth:38, textAlign:"center"}}>{task.label}</span>
-                <span style={{flex:1, fontSize:14, fontWeight:500, color:isDone?"#484f58":"#e6edf3", textDecoration:isDone?"line-through":"none", lineHeight:1.4}}>
-                  {isNext && <span style={{display:"inline-block", fontSize:9, fontWeight:800, letterSpacing:0.5, color:"#0d1117", background:"#3fb950", borderRadius:4, padding:"1px 5px", marginRight:7, verticalAlign:"middle"}}>IN PROGRESS</span>}
-                  {task.activity}
-                  {note && <span title="Has a note" style={{marginLeft:6, fontSize:11}}>📝</span>}
-                </span>
-                {task.gp_change!=null && <span style={{fontSize:11, fontWeight:700, flexShrink:0, color:task.gp_change>=0?"#3fb950":"#f85149", background:task.gp_change>=0?"#0d1f12":"#1f0d0d", border:`1px solid ${task.gp_change>=0?"#238636":"#da3633"}`, padding:"2px 7px", borderRadius:12}}>{formatGP(task.gp_change)}</span>}
-                <div style={{display:"flex", gap:4, flexShrink:0}}>
-                  <button title="Doing in parallel" onClick={e=>{ e.stopPropagation(); toggle(task.id,'parallel'); }} style={{width:24, height:24, borderRadius:6, border:`1px solid ${isParallel?"#1f6feb":"#2a3038"}`, background:isParallel?"#1f3250":"transparent", cursor:"pointer", fontSize:12, color:isParallel?"#58a6ff":"#484f58", display:"flex", alignItems:"center", justifyContent:"center"}}>⚡</button>
-                  <button title="Postpone" onClick={e=>{ e.stopPropagation(); toggle(task.id,'postponed'); }} style={{width:24, height:24, borderRadius:6, border:`1px solid ${isPostponed?"#9e6a03":"#2a3038"}`, background:isPostponed?"#1e1908":"transparent", cursor:"pointer", fontSize:12, color:isPostponed?"#d29922":"#484f58", display:"flex", alignItems:"center", justifyContent:"center"}}>⏳</button>
-                  <span style={{width:24, height:24, borderRadius:6, border:"1px solid #2a3038", background:isExpanded?"#1a2029":"transparent", fontSize:11, color:"#8b949e", display:"flex", alignItems:"center", justifyContent:"center", transform:isExpanded?"rotate(180deg)":"none", transition:"transform 0.2s"}}>▾</span>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div style={{padding:"0 14px 14px 14px", borderTop:"1px solid #1a2029"}}>
-                  {task.guide && <div style={{marginTop:12, fontSize:13, lineHeight:1.6, color:"#c9d1d9", whiteSpace:"pre-wrap", maxWidth:820}}>{task.guide}</div>}
-                  {xpEntries.length>0 && (
-                    <div style={{marginTop:12}}>
-                      <div style={{fontSize:10, letterSpacing:1.5, color:"#8b949e", textTransform:"uppercase", marginBottom:7}}>XP Gains</div>
-                      <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
-                        {xpEntries.map(([sk,xp])=>(
-                          <div key={sk} style={{background:"#1a2029", border:"1px solid #2a3038", borderRadius:8, padding:"4px 10px", display:"flex", alignItems:"center", gap:6}}>
-                            <span style={{width:8, height:8, borderRadius:"50%", background:SKILL_COLORS[sk], flexShrink:0}} />
-                            <span style={{fontSize:11, fontWeight:700, color:"#e6edf3"}}>{SKILL_FULL[sk]}</span>
-                            <span style={{fontSize:11, color:"#8b949e"}}>{formatXP(xp)} xp</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {behind.length>0 && (
-                    <div style={{marginTop:12}}>
-                      <div style={{fontSize:10, letterSpacing:1.5, color:"#f85149", textTransform:"uppercase", marginBottom:7}}>Guide expects higher levels than you have</div>
-                      <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
-                        {behind.map(([sk,lvl])=>(
-                          <div key={sk} style={{background:"#1f0d0d", border:"1px solid #da3633", borderRadius:8, padding:"3px 9px", display:"flex", alignItems:"center", gap:5}}>
-                            <span style={{width:7, height:7, borderRadius:"50%", background:SKILL_COLORS[sk]}} />
-                            <span style={{fontSize:11, fontWeight:600, color:"#f0c0c0"}}>{SKILL_FULL[sk]}</span>
-                            <span style={{fontSize:11, color:"#f85149", fontWeight:700}}>{lvl}</span>
-                            <span style={{fontSize:10, color:"#8b949e"}}>(you: {state.levels[sk]||"?"})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {task.gp_total!=null && (
-                    <div style={{marginTop:12}}>
-                      <div style={{fontSize:10, letterSpacing:1.5, color:"#8b949e", textTransform:"uppercase", marginBottom:4}}>GP after step</div>
-                      <span style={{fontSize:13, fontWeight:700, color:"#f0883e"}}>{task.gp_total>=1e6?(task.gp_total/1e6).toFixed(2)+"M":(task.gp_total/1e3).toFixed(0)+"k"} gp</span>
-                    </div>
-                  )}
-                  <div style={{marginTop:12}}>
-                    <div style={{fontSize:10, letterSpacing:1.5, color:"#8b949e", textTransform:"uppercase", marginBottom:6}}>My notes</div>
-                    <textarea value={note} onChange={e=>setNote(task.id,e.target.value)} onClick={e=>e.stopPropagation()} placeholder="e.g. stopped at 60 slayer, need 2 more diaries first…"
-                      style={{width:"100%", minHeight:46, background:"#0d1117", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, fontFamily:"inherit", padding:"8px 10px", boxSizing:"border-box", resize:"vertical", outline:"none"}} />
-                  </div>
-                </div>
-              )}
-            </div>
+            <React.Fragment key={task.id}>
+              {divider}
+              <TaskCard task={task}
+                isDone={!!state.done[task.id]} isPostponed={!!state.postponed[task.id]} isParallel={!!state.parallel[task.id]}
+                isExpanded={!!expandedIds[task.id]} isNext={task.id===nextUpId} draggable={filter==="postponed"}
+                levels={state.levels} hasLevels={hasLevels} note={state.notes[task.id]||""}
+                onToggle={key=>toggle(task.id,key)} onExpand={()=>toggleExpand(task.id)} onNote={v=>setNote(task.id,v)}
+                onDragStart={()=>{ if(filter==="postponed") dragId.current=task.id; }}
+                onDragOver={e=>{ if(filter==="postponed") e.preventDefault(); }}
+                onDrop={()=>{ if(filter==="postponed") handleDrop(task.id); }}
+                nextUpRef={nextUpRef} />
+            </React.Fragment>
           );
         })}
-
-        <div style={{background:"#10151c", border:"1px solid #21262d", borderRadius:10, padding:"12px 16px", marginTop:20}}>
-          <div style={{fontSize:10, letterSpacing:1.5, color:"#8b949e", textTransform:"uppercase", marginBottom:8}}>How to use</div>
-          <div style={{display:"flex", gap:16, flexWrap:"wrap", fontSize:12, color:"#8b949e"}}>
-            <span>Click a step to open its guide, notes, XP & level gaps (open as many as you like)</span>
-            <span>✓ done</span><span>⚡ in parallel</span><span>⏳ postpone</span>
-            <span style={{color:"#3fb950"}}>green glow = current step</span>
-          </div>
-        </div>
       </div>
     </div>
   );
