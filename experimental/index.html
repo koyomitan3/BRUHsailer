@@ -3524,19 +3524,24 @@ input[type=number]::-webkit-inner-spin-button{opacity:.3;}
                                 encodeURIComponent(u),
                             (u) => "https://thingproxy.freeboard.io/fetch/" + u,
                         ];
-                        for (const make of proxies) {
+                        const tryProxy = async (make) => {
+                            const ctrl = new AbortController();
+                            const timer = setTimeout(() => ctrl.abort(), 6000);
                             try {
-                                const res = await fetch(make(target));
-                                if (!res.ok) continue;
+                                const res = await fetch(make(target), {
+                                    signal: ctrl.signal,
+                                });
+                                if (!res.ok) throw new Error("bad status");
                                 const text = await res.text();
                                 if (
                                     !text ||
                                     text.toLowerCase().includes("<html") ||
                                     text.toLowerCase().includes("not found")
                                 )
-                                    continue;
+                                    throw new Error("bad body");
                                 const rows = text.trim().split("\n");
-                                if (rows.length < 20) continue;
+                                if (rows.length < 20)
+                                    throw new Error("short body");
                                 const levels = {};
                                 HISCORE_ORDER.forEach((key, i) => {
                                     if (key === "OVERALL") return;
@@ -3549,30 +3554,39 @@ input[type=number]::-webkit-inner-spin-button{opacity:.3;}
                                     if (!isNaN(lvl) && lvl >= 1)
                                         levels[key] = Math.min(99, lvl);
                                 });
-                                if (Object.keys(levels).length >= 10) {
-                                    setState((prev) => ({
-                                        ...prev,
-                                        levels: {
-                                            ...prev.levels,
-                                            ...levels,
-                                        },
-                                        rsn: name,
-                                        onboarded: true,
-                                    }));
-                                    setFetchStatus(
-                                        "✓ Synced " +
-                                            name +
-                                            (levels.SAI
-                                                ? ""
-                                                : " — Sailing isn't on the hiscores, add it manually"),
-                                    );
-                                    return;
-                                }
-                            } catch (e) {}
+                                if (Object.keys(levels).length < 10)
+                                    throw new Error("too few skills");
+                                return levels;
+                            } finally {
+                                clearTimeout(timer);
+                            }
+                        };
+                        try {
+                            // Race all proxies at once — first valid response wins.
+                            const levels = await Promise.any(
+                                proxies.map(tryProxy),
+                            );
+                            setState((prev) => ({
+                                ...prev,
+                                levels: {
+                                    ...prev.levels,
+                                    ...levels,
+                                },
+                                rsn: name,
+                                onboarded: true,
+                            }));
+                            setFetchStatus(
+                                "✓ Synced " +
+                                    name +
+                                    (levels.SAI
+                                        ? ""
+                                        : " — Sailing isn't on the hiscores, add it manually"),
+                            );
+                        } catch (e) {
+                            setFetchStatus(
+                                "Couldn't reach the hiscores — check the spelling or try again. Sync works best when this page is hosted online. You can also enter levels manually.",
+                            );
                         }
-                        setFetchStatus(
-                            "Couldn't reach the hiscores — check the spelling or try again. Sync works best when this page is hosted online. You can also enter levels manually.",
-                        );
                     },
                     [rsnInput],
                 );
